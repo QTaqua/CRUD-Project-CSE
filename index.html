@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GAME of JAB API Client</title>
+    <title>GAME of JAB Teams API Client</title>
     <style>
         /* Minimalist and Centered CSS */
         body {
@@ -56,12 +56,11 @@
         button:hover {
             background-color: #2980b9;
         }
-        .delete-btn {
-            background-color: #e74c3c;
-        }
-        .delete-btn:hover {
-            background-color: #c0392b;
-        }
+        .delete-btn { background-color: #e74c3c; }
+        .delete-btn:hover { background-color: #c0392b; }
+        .update-btn { background-color: #f39c12; }
+        .update-btn:hover { background-color: #e67e22; }
+
         #teams-list {
             margin-top: 15px;
             list-style: none;
@@ -75,6 +74,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+        #teams-list li button {
+             margin-left: 5px;
         }
         .message {
             margin-top: 15px;
@@ -90,8 +92,8 @@
 <body>
 
 <div class="container">
-    <h1>GAME of JAB API Tester</h1>
-    <p>Using the **Teams** endpoint for demonstration (http://127.0.0.1:5000/api/teams)</p>
+    <h1>GAME of JAB Teams CRUD Tester</h1>
+    <p>Targeting API endpoint: `http://127.0.0.1:5000/api/teams`</p>
 
     <div id="message-box" class="message" style="display: none;"></div>
 
@@ -105,7 +107,17 @@
     </div>
 
     <div class="section">
-        <h2>Current Teams (GET)</h2>
+        <h2>Update Existing Team (PUT)</h2>
+        <form id="update-team-form">
+            <input type="number" id="update-team-id" placeholder="Team ID" required>
+            <input type="text" id="update-team-name" placeholder="New Name (optional)">
+            <input type="text" id="update-region" placeholder="New Region (optional)">
+            <button type="submit" class="update-btn">Update Team</button>
+        </form>
+    </div>
+
+    <div class="section">
+        <h2>Current Teams (GET / DELETE)</h2>
         <button onclick="loadTeams()">Refresh List</button>
         <ul id="teams-list">
             <li>Loading teams...</li>
@@ -129,24 +141,15 @@
         }, 3000);
     }
 
-    // --- 1. READ (GET) ---
+    // --- API Interactions ---
 
+    // READ ALL (GET)
     async function loadTeams() {
         teamsList.innerHTML = '<li>Fetching data...</li>';
         try {
-            // NOTE: You must include your JWT token here once security is implemented!
-            // const token = 'YOUR_JWT_TOKEN_HERE'; 
-            
-            const response = await fetch(API_BASE_URL, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${token}` // Uncomment when ready for JWT
-                }
-            });
-
+            const response = await fetch(API_BASE_URL, { method: 'GET' });
             const data = await response.json();
-
+            
             if (response.ok) {
                 renderTeams(data.teams || data);
             } else {
@@ -170,79 +173,108 @@
         teams.forEach(team => {
             const li = document.createElement('li');
             li.innerHTML = `
-                **ID:** ${team.team_id} | **Name:** ${team.team_name} | **Region:** ${team.region}
-                <button class="delete-btn" onclick="deleteTeam(${team.team_id})">Delete</button>
+                <span>
+                    <strong>ID ${team.team_id}:</strong> ${team.team_name} (${team.region})
+                </span>
+                <div>
+                    <button class="delete-btn" onclick="deleteTeam(${team.team_id})">Delete</button>
+                </div>
             `;
             teamsList.appendChild(li);
         });
     }
 
-    // --- 2. CREATE (POST) ---
-
+    // CREATE (POST) - Attached to form submit
     document.getElementById('create-team-form').addEventListener('submit', async function(event) {
         event.preventDefault();
-        
         const teamName = document.getElementById('team-name').value;
         const region = document.getElementById('region').value;
         
-        const newTeamData = {
-            team_name: teamName,
-            region: region
-        };
-
         try {
             const response = await fetch(API_BASE_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${token}` // Uncomment when ready for JWT
-                },
-                body: JSON.stringify(newTeamData)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team_name: teamName, region: region })
             });
 
             const data = await response.json();
 
             if (response.status === 201) { // 201 Created
                 showMessage(`Team "${teamName}" created successfully! ID: ${data.team_id}`, 'success');
-                loadTeams(); // Refresh list
-                document.getElementById('create-team-form').reset();
+                loadTeams(); 
+                this.reset();
             } else {
                 showMessage(`Creation failed: ${data.error || response.statusText}`, 'error');
             }
         } catch (error) {
-            console.error('Fetch error:', error);
-            showMessage('Network or Server connection error.', 'error');
+            showMessage('Network or Server connection error during creation.', 'error');
         }
     });
 
-    // --- 3. DELETE (DELETE) ---
+    // UPDATE (PUT) - Attached to update form submit
+    document.getElementById('update-team-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const teamId = document.getElementById('update-team-id').value;
+        const newName = document.getElementById('update-team-name').value;
+        const newRegion = document.getElementById('update-region').value;
+        
+        if (!teamId) {
+            showMessage('Please enter a Team ID to update.', 'error');
+            return;
+        }
 
-    async function deleteTeam(teamId) {
-        if (!confirm(`Are you sure you want to delete Team ID ${teamId}?`)) {
+        const updateData = {};
+        if (newName) updateData.team_name = newName;
+        if (newRegion) updateData.region = newRegion;
+
+        if (Object.keys(updateData).length === 0) {
+            showMessage('Please enter at least a new name or a new region.', 'error');
             return;
         }
 
         try {
             const response = await fetch(`${API_BASE_URL}/${teamId}`, {
-                method: 'DELETE',
-                headers: {
-                    // 'Authorization': `Bearer ${token}` // Uncomment when ready for JWT
-                }
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updateData)
             });
+
+            const data = await response.json();
+
+            if (response.status === 200 || response.status === 204) { // 200 OK or 204 No Content
+                showMessage(`Team ID ${teamId} updated successfully.`, 'success');
+                loadTeams(); 
+                this.reset();
+            } else if (response.status === 404) {
+                 showMessage(`Update failed: Team ID ${teamId} not found.`, 'error');
+            } else {
+                showMessage(`Update failed (Code ${response.status}): ${data.error || response.statusText}`, 'error');
+            }
+        } catch (error) {
+            showMessage('Network or Server connection error during update.', 'error');
+        }
+    });
+
+    // DELETE (DELETE)
+    async function deleteTeam(teamId) {
+        if (!confirm(`Are you sure you want to delete Team ID ${teamId}? Note: This will fail if players or matches are linked!`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/${teamId}`, { method: 'DELETE' });
 
             if (response.status === 204) { // 204 No Content
                 showMessage(`Team ID ${teamId} deleted successfully.`, 'success');
-                loadTeams(); // Refresh list
+                loadTeams();
             } else if (response.status === 404) {
                  showMessage(`Deletion failed: Team ID ${teamId} not found.`, 'error');
-            }
-             else {
+            } else {
                 const data = await response.json();
-                showMessage(`Deletion failed: ${data.error || response.statusText}`, 'error');
+                showMessage(`Deletion failed (Code ${response.status}): ${data.error || response.statusText}`, 'error');
             }
         } catch (error) {
-            console.error('Fetch error:', error);
-            showMessage('Network or Server connection error.', 'error');
+            showMessage('Network or Server connection error during deletion.', 'error');
         }
     }
 

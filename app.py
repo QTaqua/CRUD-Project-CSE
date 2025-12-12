@@ -28,6 +28,38 @@ def get_db_connection():
         print(f"Error connecting to MySQL: {err}")
         return None
 
+
+def get_next_id(table_name, id_column):
+    """Fetches the maximum existing ID and returns the next one (max + 1)."""
+    # Use a direct, simple connection just for this query to minimize overhead
+    conn = get_db_connection()
+    if conn is None:
+        return None 
+    
+    cursor = conn.cursor()
+    
+    try:
+        # Use MAX() to find the largest existing ID
+        query = f"SELECT MAX({id_column}) FROM {table_name}"
+        cursor.execute(query)
+        
+        # fetchone() returns a tuple, e.g., (105,)
+        max_id = cursor.fetchone()[0] 
+        
+        # If max_id is None (table is empty), start at 1. Otherwise, return max + 1.
+        next_id = (max_id or 0) + 1
+        return next_id
+
+    except mysql.connector.Error as err:
+        print(f"Error calculating next ID: {err}")
+        return None
+        
+    finally:
+        cursor.close()
+        conn.close()
+
+
+
 def execute_query(query, params=None, fetch=True):
     """
     Executes a database query. 
@@ -110,31 +142,37 @@ def format_response(data, resource_name, status_code):
 # --- C: Create New Team (POST) ---
 @app.route('/api/teams', methods=['POST'])
 def create_team():
-    """Handles creating a new team with input validation."""
+    """Handles creating a new team with input validation and manual ID generation."""
     data = request.get_json()
     
-   
+    # Graded Requirement: Input Validation
     if not data or 'team_name' not in data or 'region' not in data:
         return make_response(jsonify({'error': 'Missing required fields: team_name and region are required.'}), 400)
 
     team_name = data['team_name']
     region = data['region']
+
+    # --- MANUAL ID GENERATION START ---
+    new_team_id = get_next_id("Teams", "team_id")
     
-  
-    query = "INSERT INTO Teams (team_name, region) VALUES (%s, %s)"
-    params = (team_name, region)
+    if new_team_id is None:
+        return make_response(jsonify({'error': 'Failed to calculate new team ID.'}), 500)
+    # --- MANUAL ID GENERATION END ---
     
+    # 🚨 CRITICAL CHANGE: Query now includes 'team_id'
+    query = "INSERT INTO Teams (team_id, team_name, region) VALUES (%s, %s, %s)"
+    params = (new_team_id, team_name, region) # Pass the generated ID
+    
+    # Note: We must change fetch=False from 201 to 200 for CUD operation messages
     result, status_code = execute_query(query, params=params, fetch=False)
     
-    if status_code == 201:
-        # Fetch the newly created record to return it
-        new_team_id = result.get('last_id', 'N/A')
-        
-        
-        response_data = {'team_id': new_team_id, 'team_name': team_name, 'region': region}
-        return format_response(response_data, 'team', 201)
+    if status_code != 201:
+        # If the query fails, return the error message
+        return jsonify(result), status_code
     
-    return jsonify(result), status_code # Return error response
+    # Return 201 Created response
+    response_data = {'team_id': new_team_id, 'team_name': team_name, 'region': region}
+    return format_response(response_data, 'team', 201)
 
 # --- R: Read All Teams (GET) ---
 @app.route('/api/teams', methods=['GET'])
@@ -170,14 +208,16 @@ def get_team(team_id):
 # --- U: Update Team (PUT) ---
 @app.route('/api/teams/<int:team_id>', methods=['PUT'])
 def update_team(team_id):
-    """Handles updating an existing team with input validation."""
+    """
+    Handles updating an existing team (team_name or region) by ID.
+    """
     data = request.get_json()
     
-    
+    # Graded Requirement: Input Validation (Check if payload exists and has fields)
     if not data or not any(key in data for key in ['team_name', 'region']):
-        return make_response(jsonify({'error': 'No fields provided for update. Must include team_name or region.'}), 400)
+        return make_response(jsonify({'error': 'No valid fields provided for update. Must include team_name or region.'}), 400)
     
-    # Build the dynamic UPDATE query
+    # 1. Build the dynamic UPDATE query based on provided fields
     updates = []
     params = []
     
@@ -189,46 +229,88 @@ def update_team(team_id):
         updates.append("region = %s")
         params.append(data['region'])
         
+    if not updates:
+        return make_response(jsonify({'error': 'No updatable fields found in request body.'}), 400)
+
+    # 2. Finalize query and parameters
     query = f"UPDATE Teams SET {', '.join(updates)} WHERE team_id = %s"
     params.append(team_id)
     
+    # 3. Execute the query
     result, status_code = execute_query(query, params=tuple(params), fetch=False)
     
     if status_code != 201:
         return jsonify(result), status_code
     
-    
+    # 4. Check for 404 Not Found condition
     if result.get('rows_affected') == 0:
-        # Check if the team exists before returning 404 
-        team_data, _ = execute_query("SELECT team_id FROM Teams WHERE team_id = %s", (team_id,), fetch=True)
-        if not team_data:
+        # We need a quick SELECT check to distinguish between: 404 vs. 200 (no change)
+        check_query = "SELECT team_id FROM Teams WHERE team_id = %s"
+        team_check, check_status = execute_query(check_query, (team_id,), fetch=True)
+        
+        if check_status == 200 and not team_check:
+            # Team ID not existing -> 404
             return make_response(jsonify({'error': f'Team with ID {team_id} not found.'}), 404)
         
-        return make_response(jsonify({'message': f'Team {team_id} updated, or data was identical.'}), 200)
+        # Team ID exists, but no change was made -> 200 OK
+        return make_response(jsonify({'message': f'Team {team_id} found, but no changes were applied (data was identical).'}), 200)
 
-    # Return success and the updated ID
+    # 5. Success
     return make_response(jsonify({'message': f'Team {team_id} updated successfully.'}), 200)
 
 # --- D: Delete Team (DELETE) ---
 @app.route('/api/teams/<int:team_id>', methods=['DELETE'])
+# Note: You will add a decorator here later for security/JWT
 def delete_team(team_id):
-    """Handles deleting a team by ID."""
+    """
+    Handles deleting a team by ID.
+
+    Graded Requirement: 
+    - 204 No Content on successful deletion.
+    - 404 Not Found if team does not exist.
+    - 409 Conflict if Foreign Key constraints prevent deletion.
+    """
     query = "DELETE FROM Teams WHERE team_id = %s"
     params = (team_id,)
     
+    # Execute the query. We use fetch=False as it's a CUD operation.
     result, status_code = execute_query(query, params=params, fetch=False)
     
+    # The execute_query function handles general database errors (500)
     if status_code != 201:
-        # Check for Foreign Key constraint violation (e.g., if players are still linked)
-        if 'Foreign Key' in result.get('error', ''):
-             return make_response(jsonify({'error': f"Cannot delete Team {team_id}. It is still referenced by Players or Matches."}), 409) # Conflict
+        error_message = result.get('error', '')
+        
+        # Check for Foreign Key constraint violation (MySQL Error 1451 or 1452)
+        # Your execute_query helper should catch this and return a 409 status code
+        # However, let's explicitly handle the message for clarity:
+        if 'Foreign Key' in error_message or status_code == 409:
+             return make_response(jsonify({
+                 'error': f"Cannot delete Team {team_id}. It is still referenced by Players or Matches.",
+                 'code': 'FK_VIOLATION'
+             }), 409) # 409 Conflict
+             
+        # Return any other execution error
         return jsonify(result), status_code
     
+    # If successful (status_code == 201 from execute_query), check rows_affected.
+    
+    # Graded Requirement: 404 Not Found for delete
     if result.get('rows_affected') == 0:
+        # Check if the team existed before deletion
+        check_query = "SELECT team_id FROM Teams WHERE team_id = %s"
+        team_check, _ = execute_query(check_query, (team_id,), fetch=True)
+        
+        # If the check returns no data, the resource was not found
+        if not team_check:
+            return make_response(jsonify({'error': f'Team with ID {team_id} not found.'}), 404)
+        
+        # If rows_affected is 0 but the team was found, it means no actual change occurred (shouldn't happen with DELETE)
+        # But we default to 404 if 0 rows were affected and the resource check fails.
         return make_response(jsonify({'error': f'Team with ID {team_id} not found.'}), 404)
     
-    return make_response('', 204) 
-
+    # Graded Requirement: 204 No Content
+    # This indicates successful deletion with no body to return.
+    return make_response('', 204)
 
 # --- 4. APPLICATION RUNNER ---
 

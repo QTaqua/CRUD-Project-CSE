@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAME of JAB API Client</title>
+    <style>
+        /* Minimalist and Centered CSS */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        input[type="text"], input[type="number"] {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            flex: 1;
+            min-width: 150px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+        }
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+        #teams-list {
+            margin-top: 15px;
+            list-style: none;
+            padding: 0;
+        }
+        #teams-list li {
+            background: #ecf0f1;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>GAME of JAB API Tester</h1>
+    <p>Using the **Teams** endpoint for demonstration (http://127.0.0.1:5000/api/teams)</p>
+
+    <div id="message-box" class="message" style="display: none;"></div>
+
+    <div class="section">
+        <h2>Add New Team (POST)</h2>
+        <form id="create-team-form">
+            <input type="text" id="team-name" placeholder="Team Name" required>
+            <input type="text" id="region" placeholder="Region" required>
+            <button type="submit">Create Team</button>
+        </form>
+    </div>
+
+    <div class="section">
+        <h2>Current Teams (GET)</h2>
+        <button onclick="loadTeams()">Refresh List</button>
+        <ul id="teams-list">
+            <li>Loading teams...</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    const API_BASE_URL = 'http://127.0.0.1:5000/api/teams';
+    const messageBox = document.getElementById('message-box');
+    const teamsList = document.getElementById('teams-list');
+
+    // --- Helper Functions ---
+
+    function showMessage(text, type) {
+        messageBox.textContent = text;
+        messageBox.className = 'message ' + type;
+        messageBox.style.display = 'block';
+        setTimeout(() => {
+            messageBox.style.display = 'none';
+        }, 3000);
+    }
+
+    // --- 1. READ (GET) ---
+
+    async function loadTeams() {
+        teamsList.innerHTML = '<li>Fetching data...</li>';
+        try {
+            // NOTE: You must include your JWT token here once security is implemented!
+            // const token = 'YOUR_JWT_TOKEN_HERE'; 
+            
+            const response = await fetch(API_BASE_URL, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Authorization': `Bearer ${token}` // Uncomment when ready for JWT
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                renderTeams(data.teams || data);
+            } else {
+                showMessage(`Error loading teams: ${data.error || response.statusText}`, 'error');
+                teamsList.innerHTML = '<li>Error loading teams. Check console.</li>';
+            }
+        } catch (error) {
+            console.error('Fetch error:', error);
+            showMessage('Network or Server connection error.', 'error');
+            teamsList.innerHTML = '<li>Could not connect to the API.</li>';
+        }
+    }
+
+    function renderTeams(teams) {
+        teamsList.innerHTML = '';
+        if (teams.length === 0) {
+            teamsList.innerHTML = '<li>No teams found.</li>';
+            return;
+        }
+
+        teams.forEach(team => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                **ID:** ${team.team_id} | **Name:** ${team.team_name} | **Region:** ${team.region}
+                <button class="delete-btn" onclick="deleteTeam(${team.team_id})">Delete</button>
+            `;
+            teamsList.appendChild(li);
+        });
+    }
+
+    // --- 2. CREATE (POST) ---
+
+    document.getElementById('create-team-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const teamName = document.getElementById('team-name').value;
+        const region = document.getElementById('region').value;
+        
+        const newTeamData = {
+            team_name: teamName,
+            region: region
+        };
+
+        try {
+            const response = await fetch(API_BASE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Authorization': `Bearer ${token}` // Uncomment when ready for JWT
+                },
+                body: JSON.stringify(newTeamData)
+            });
+
+            const data = await response.json();
+
+            if (response.status === 201) { // 201 Created
+                showMessage(`Team "${teamName}" created successfully! ID: ${data.team_id}`, 'success');
+                loadTeams(); // Refresh list
+                document.getElementById('create-team-form').reset();
+            } else {
+                showMessage(`Creation failed: ${data.error || response.statusText}`, 'error');
+            }
+        } catch (error) {
+            console.error('Fetch error:', error);
+            showMessage('Network or Server connection error.', 'error');
+        }
+    });
+
+    // --- 3. DELETE (DELETE) ---
+
+    async function deleteTeam(teamId) {
+        if (!confirm(`Are you sure you want to delete Team ID ${teamId}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/${teamId}`, {
+                method: 'DELETE',
+                headers: {
+                    // 'Authorization': `Bearer ${token}` // Uncomment when ready for JWT
+                }
+            });
+
+            if (response.status === 204) { // 204 No Content
+                showMessage(`Team ID ${teamId} deleted successfully.`, 'success');
+                loadTeams(); // Refresh list
+            } else if (response.status === 404) {
+                 showMessage(`Deletion failed: Team ID ${teamId} not found.`, 'error');
+            }
+             else {
+                const data = await response.json();
+                showMessage(`Deletion failed: ${data.error || response.statusText}`, 'error');
+            }
+        } catch (error) {
+            console.error('Fetch error:', error);
+            showMessage('Network or Server connection error.', 'error');
+        }
+    }
+
+    // Initial load when the page loads
+    window.onload = loadTeams; 
+</script>
+
+</body>
+</html>

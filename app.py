@@ -2,10 +2,12 @@
 
 from flask import Flask, jsonify, request, make_response
 import mysql.connector
+from flask_cors import CORS
 from datetime import date, datetime
 
 # --- 1. CONFIGURATION ---
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Database configuration 
 DB_CONFIG = {

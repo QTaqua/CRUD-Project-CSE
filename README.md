@@ -21,7 +21,7 @@ Before running the application, ensure you have the following software installed
 You must first set up your database using the provided SQL script.
 
 1.  Connect to your local MySQL server.
-2.  Run the full SQL script containing the `CREATE DATABASE`, `CREATE TABLE` (Teams, Players, Matches), and `INSERT` statements to populate the initial 20+ records.
+2.  Run the full SQL script to your local machine.
 3.  **Crucially:** Update the connection details in `app.py` (or a separate config file) to match your local MySQL credentials.
 
 ### 2. Local Setup

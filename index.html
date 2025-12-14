@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GAME of JAB Teams API Client</title>
+    <title>GAME of JAB Teams CRUD Tester (Authenticated)</title>
     <style>
         /* Minimalist and Centered CSS */
         body {
@@ -37,7 +37,7 @@
             align-items: center;
             flex-wrap: wrap;
         }
-        input[type="text"], input[type="number"] {
+        input[type="text"], input[type="password"], input[type="number"] {
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
@@ -87,6 +87,11 @@
         }
         .success { background-color: #d4edda; color: #155724; }
         .error { background-color: #f8d7da; color: #721c24; }
+        #auth-status {
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -97,6 +102,17 @@
 
     <div id="message-box" class="message" style="display: none;"></div>
 
+    <div class="section">
+        <h2>Authentication (POST /api/auth/login)</h2>
+        <div id="auth-status">Status: Not Logged In</div>
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Username (admin)" required>
+            <input type="password" id="password" placeholder="Password (12345)" required>
+            <button type="submit">Login</button>
+            <button type="button" onclick="logout()" class="delete-btn">Logout</button>
+        </form>
+    </div>
+    
     <div class="section">
         <h2>Add New Team (POST)</h2>
         <form id="create-team-form">
@@ -127,10 +143,16 @@
 
 <script>
     const API_BASE_URL = 'http://127.0.0.1:5000/api/teams';
+    const LOGIN_URL = 'http://127.0.0.1:5000/api/auth/login';
     const messageBox = document.getElementById('message-box');
     const teamsList = document.getElementById('teams-list');
+    const authStatus = document.getElementById('auth-status');
 
     // --- Helper Functions ---
+
+    function getAuthToken() {
+        return localStorage.getItem('jwt_token');
+    }
 
     function showMessage(text, type) {
         messageBox.textContent = text;
@@ -140,51 +162,139 @@
             messageBox.style.display = 'none';
         }, 3000);
     }
-
-    // --- API Interactions ---
-
-    // READ ALL (GET)
-    async function loadTeams() {
-        teamsList.innerHTML = '<li>Fetching data...</li>';
-        try {
-            const response = await fetch(API_BASE_URL, { method: 'GET' });
-            const data = await response.json();
-            
-            if (response.ok) {
-                renderTeams(data.teams || data);
-            } else {
-                showMessage(`Error loading teams: ${data.error || response.statusText}`, 'error');
-                teamsList.innerHTML = '<li>Error loading teams. Check console.</li>';
-            }
-        } catch (error) {
-            console.error('Fetch error:', error);
-            showMessage('Network or Server connection error.', 'error');
-            teamsList.innerHTML = '<li>Could not connect to the API.</li>';
+    
+    function updateAuthStatus() {
+        const token = getAuthToken();
+        if (token) {
+            authStatus.textContent = "Status: Logged In (Token Stored)";
+            authStatus.style.color = '#27ae60';
+        } else {
+            authStatus.textContent = "Status: Not Logged In";
+            authStatus.style.color = '#e74c3c';
         }
     }
 
-    function renderTeams(teams) {
-        teamsList.innerHTML = '';
-        if (teams.length === 0) {
-            teamsList.innerHTML = '<li>No teams found.</li>';
+    // --- AUTHENTICATION LOGIC ---
+
+    document.getElementById('login-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            const response = await fetch(LOGIN_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, password: password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.token) {
+                localStorage.setItem('jwt_token', data.token);
+                showMessage('Login successful! Token stored.', 'success');
+                updateAuthStatus();
+                // Optionally refresh the team list to confirm access
+                loadTeams(); 
+            } else {
+                showMessage(`Login failed: ${data.error || 'Invalid credentials'}`, 'error');
+                updateAuthStatus();
+            }
+        } catch (error) {
+            showMessage('Network error during login.', 'error');
+        }
+    });
+
+    function logout() {
+        localStorage.removeItem('jwt_token');
+        showMessage('Logged out. Token removed.', 'success');
+        updateAuthStatus();
+    }
+
+
+    // --- API INTERACTIONS (Modified to include JWT) ---
+
+    // READ ALL (GET)
+
+// --- RENDER FUNCTION ---
+function renderTeams(teams) {
+    teamsList.innerHTML = '';
+    if (!Array.isArray(teams) || teams.length === 0) {
+        teamsList.innerHTML = '<li>No teams found.</li>';
+        return;
+    }
+
+    teams.forEach(team => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <span>
+                <strong>ID ${team.team_id}:</strong> ${team.team_name} (${team.region})
+            </span>
+            <div>
+                <button class="delete-btn" onclick="deleteTeam(${team.team_id})">Delete</button>
+            </div>
+        `;
+        teamsList.appendChild(li);
+    });
+}
+
+// READ ALL (GET)
+async function loadTeams() {
+    teamsList.innerHTML = '<li>Fetching data...</li>';
+    
+    try {
+        const response = await fetch(API_BASE_URL, { method: 'GET' });
+        
+        let data;
+        
+        // 1. Attempt to parse the JSON body
+        try {
+            data = await response.json();
+        } catch (e) {
+            // This catches SyntaxErrors if the response is empty or not JSON (e.g., 500 error)
+            // If the fetch was successful but the content wasn't JSON, we handle it as an error
+            if (response.ok) {
+                // If response is 200 OK but content is empty/bad, we assume no teams
+                renderTeams([]); 
+                return;
+            }
+            // If the response was an error code (4xx, 5xx) and didn't have JSON:
+            showMessage(`API Error (${response.status}): Could not parse response.`, 'error');
+            teamsList.innerHTML = `<li>Error ${response.status}: Failed to read data.</li>`;
             return;
         }
 
-        teams.forEach(team => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <span>
-                    <strong>ID ${team.team_id}:</strong> ${team.team_name} (${team.region})
-                </span>
-                <div>
-                    <button class="delete-btn" onclick="deleteTeam(${team.team_id})">Delete</button>
-                </div>
-            `;
-            teamsList.appendChild(li);
-        });
+        // 2. Handle the parsed data (Check status code)
+        if (response.ok) {
+            // Your API returns the data wrapped in the key 'teams' via format_response.
+            // We use the same safe access: data.teams or fall back to just data (if unwrapped)
+            renderTeams(data.teams || data);
+        } else {
+            // Handle API errors that DO return JSON (e.g., a 404 with {"error": "..."})
+            showMessage(`Error loading teams: ${data.error || response.statusText}`, 'error');
+            teamsList.innerHTML = '<li>Error loading teams.</li>';
+        }
+    } catch (error) {
+        // This catches network failures (server is down, connection refused)
+        console.error('Network Fetch error:', error);
+        showMessage('Network or Server connection error.', 'error');
+        teamsList.innerHTML = '<li>Could not connect to the API.</li>';
+    }
+}
+
+    // Helper function to create standard headers including the token
+    function getAuthHeaders() {
+        const token = getAuthToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+            // Include the Bearer token for protected routes
+            headers['Authorization'] = `Bearer ${token}`; 
+        }
+        return headers;
     }
 
-    // CREATE (POST) - Attached to form submit
+    // CREATE (POST) - Uses JWT
     document.getElementById('create-team-form').addEventListener('submit', async function(event) {
         event.preventDefault();
         const teamName = document.getElementById('team-name').value;
@@ -193,16 +303,18 @@
         try {
             const response = await fetch(API_BASE_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(), // <-- Uses Auth Headers
                 body: JSON.stringify({ team_name: teamName, region: region })
             });
 
             const data = await response.json();
 
-            if (response.status === 201) { // 201 Created
+            if (response.status === 201) { 
                 showMessage(`Team "${teamName}" created successfully! ID: ${data.team_id}`, 'success');
                 loadTeams(); 
                 this.reset();
+            } else if (response.status === 401) {
+                showMessage('Action failed: You are unauthorized. Please log in.', 'error');
             } else {
                 showMessage(`Creation failed: ${data.error || response.statusText}`, 'error');
             }
@@ -211,17 +323,14 @@
         }
     });
 
-    // UPDATE (PUT) - Attached to update form submit
+    // UPDATE (PUT) - Uses JWT
     document.getElementById('update-team-form').addEventListener('submit', async function(event) {
         event.preventDefault();
         const teamId = document.getElementById('update-team-id').value;
         const newName = document.getElementById('update-team-name').value;
         const newRegion = document.getElementById('update-region').value;
         
-        if (!teamId) {
-            showMessage('Please enter a Team ID to update.', 'error');
-            return;
-        }
+        // ... (Update validation logic remains the same)
 
         const updateData = {};
         if (newName) updateData.team_name = newName;
@@ -235,16 +344,18 @@
         try {
             const response = await fetch(`${API_BASE_URL}/${teamId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(), // <-- Uses Auth Headers
                 body: JSON.stringify(updateData)
             });
 
             const data = await response.json();
 
-            if (response.status === 200 || response.status === 204) { // 200 OK or 204 No Content
+            if (response.status === 200 || response.status === 204) { 
                 showMessage(`Team ID ${teamId} updated successfully.`, 'success');
                 loadTeams(); 
                 this.reset();
+            } else if (response.status === 401) {
+                showMessage('Action failed: You are unauthorized. Please log in.', 'error');
             } else if (response.status === 404) {
                  showMessage(`Update failed: Team ID ${teamId} not found.`, 'error');
             } else {
@@ -255,18 +366,26 @@
         }
     });
 
-    // DELETE (DELETE)
+    // DELETE (DELETE) - Uses JWT
     async function deleteTeam(teamId) {
         if (!confirm(`Are you sure you want to delete Team ID ${teamId}? Note: This will fail if players or matches are linked!`)) {
             return;
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/${teamId}`, { method: 'DELETE' });
+            const response = await fetch(`${API_BASE_URL}/${teamId}`, { 
+                method: 'DELETE',
+                headers: getAuthHeaders() // <-- Uses Auth Headers
+            });
 
             if (response.status === 204) { // 204 No Content
                 showMessage(`Team ID ${teamId} deleted successfully.`, 'success');
                 loadTeams();
+            } else if (response.status === 401) {
+                showMessage('Action failed: You are unauthorized. Please log in.', 'error');
+            } else if (response.status === 409) {
+                const data = await response.json();
+                showMessage(`Deletion failed (409 Conflict): ${data.error || 'Foreign Key Constraint'}`, 'error');
             } else if (response.status === 404) {
                  showMessage(`Deletion failed: Team ID ${teamId} not found.`, 'error');
             } else {
@@ -279,7 +398,10 @@
     }
 
     // Initial load when the page loads
-    window.onload = loadTeams; 
+    window.onload = () => {
+        updateAuthStatus();
+        loadTeams(); 
+    };
 </script>
 
 </body>

@@ -3,11 +3,17 @@
 from flask import Flask, jsonify, request, make_response
 import mysql.connector
 from flask_cors import CORS
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
+import jwt
+from functools import wraps
+
 
 # --- 1. CONFIGURATION ---
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# JWT Configuration (Choose a strong, random key)
+app.config['SECRET_KEY'] = 'YOUR_VERY_STRONG_SECRET_KEY_HERE'
 
 # Database configuration 
 DB_CONFIG = {
@@ -139,8 +145,85 @@ def format_response(data, resource_name, status_code):
         resource_name: data
     }), status_code
 
+def token_required(f):
+    """
+    Decorator function to secure API routes.
+    It checks for a valid JWT in the Authorization header.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        # JWTs are typically sent as: Authorization: Bearer <token>
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            try:
+                # Attempt to extract the token part
+                token = auth_header.split(' ')[1]
+            except IndexError:
+                # Header present but not in 'Bearer <token>' format
+                return make_response(jsonify({'error': 'Token format is invalid. Use "Bearer <token>"'}), 401)
+        
+        if not token:
+            return make_response(jsonify({'error': 'Token is missing'}), 401) # 401 Unauthorized
+
+        try:
+            # Decode the token using the secret key
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            # You can attach the user ID or other data to the request context here if needed
+            # current_user_id = data.get('user_id') 
+            pass # Token is valid
+            
+        except jwt.ExpiredSignatureError:
+            return make_response(jsonify({'error': 'Token has expired'}), 401)
+
+        except jwt.InvalidTokenError:
+            return make_response(jsonify({'error': 'Token is invalid'}), 401)
+
+        # Pass the execution to the original function (e.g., create_team)
+        return f(*args, **kwargs)
+
+    return decorated
+
+# --- Token Generation/Login (POST) ---
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """Generates a JWT upon successful authentication."""
+    auth = request.get_json()
+    
+    if not auth or not auth.get('username') or not auth.get('password'):
+        return make_response(
+            jsonify({'error': 'Missing username or password'}), 400
+        )
+        
+    # --- Hardcoded Check (REPLACE WITH DB CHECK LATER) ---
+    if auth.get('username') == 'admin' and auth.get('password') == '12345':
+        # 1. Define the payload
+        payload = {
+            'user_id': 1, # Example user ID
+            'username': 'admin',
+            'exp': datetime.now(timezone.utc) + timedelta(minutes=60), # Token expires in 60 minutes
+            'iat': datetime.now(timezone.utc) # Issued at time
+        }
+        
+        # 2. Encode the token
+        token = jwt.encode(
+            payload,
+            app.config['SECRET_KEY'],
+            algorithm='HS256'
+        )
+        
+        # 3. Return the token to the client
+        return jsonify({'token': token})
+        
+    # Failed authentication
+    return make_response(
+        jsonify({'error': 'Could not verify'}), 401,
+        {'WWW-Authenticate': 'Basic realm="Login required"'}
+    )
+
 # --- C: Create New Team (POST) ---
 @app.route('/api/teams', methods=['POST'])
+@token_required
 def create_team():
     """Handles creating a new team with input validation and manual ID generation."""
     data = request.get_json()
@@ -207,6 +290,7 @@ def get_team(team_id):
 
 # --- U: Update Team (PUT) ---
 @app.route('/api/teams/<int:team_id>', methods=['PUT'])
+@token_required
 def update_team(team_id):
     """
     Handles updating an existing team (team_name or region) by ID.
@@ -260,7 +344,7 @@ def update_team(team_id):
 
 # --- D: Delete Team (DELETE) ---
 @app.route('/api/teams/<int:team_id>', methods=['DELETE'])
-# Note: You will add a decorator here later for security/JWT
+@token_required
 def delete_team(team_id):
     """
     Handles deleting a team by ID.

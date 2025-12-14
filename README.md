@@ -43,3 +43,9 @@ source venv/bin/activate
 
 # Install required packages
 pip install -r requirements.txt
+
+### 3. Run App
+1.  Activate MySQL Server(where the database is stored)
+2.  Run python app.py(ensure virtual environment is running else the program will not start)
+3.  (optional) open index.html in file to show frontend for easier demonstration of the CRUD function
+4.  Open the server in postman or cURL and use the routes provided in the code to run the operations.

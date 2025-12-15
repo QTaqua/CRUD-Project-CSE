@@ -36,6 +36,21 @@ INSERT INTO Teams (team_id, team_name, region) VALUES
 (103, 'Stellar Knights', 'Asia'),
 (104, 'Desert Foxes', 'North America'),
 (105, 'Arctic Wolves', 'Europe');
+(106, 'The Midnight Runners', 'North-East'),
+(107, 'Silent Storm', 'West Coast'),
+(108, 'Crimson Tide', 'Mid-Atlantic'),
+(109, 'Galactic Guardians', 'New York'),
+(110, 'Desert Dogs', 'South-West'),
+(111, 'Iron Dynasty', 'Texas'),
+(112, 'Emerald Dragons', 'Pacific North'),
+(113, 'The Silver Shrouds', 'Great Lakes'),
+(114, 'Rift Raiders', 'Southeast Asia'),
+(115, 'Nova Knights', 'European Union'),
+(116, 'Shadow Syndicate', 'Oceania'),
+(117, 'Terra Titans', 'Midwest'),
+(118, 'Frozen Phantoms', 'Canada'),
+(119, 'Solar Flare', 'South America'),
+(120, 'The Vanguard', 'The Midlands');
 
 INSERT INTO players (player_id, player_name, team_id, position, skill_rating) VALUES
 (1, 'Astraeus', 101, 'Attacker', 1850),

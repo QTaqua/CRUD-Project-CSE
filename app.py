@@ -1,5 +1,3 @@
-# app.py
-
 from flask import Flask, jsonify, request, make_response
 import mysql.connector
 from flask_cors import CORS
@@ -13,7 +11,9 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # JWT Configuration (Choose a strong, random key)
-app.config['SECRET_KEY'] = 'YOUR_VERY_STRONG_SECRET_KEY_HERE'
+app.config['SECRET_KEY'] = 'YOUR_VERY_STRONG_SECRET_KEY_HERE' 
+'''if want to generate a random key you can use:
+import os'''
 
 # Database configuration 
 DB_CONFIG = {
@@ -195,7 +195,7 @@ def login():
             jsonify({'error': 'Missing username or password'}), 400
         )
         
-    # --- Hardcoded Check (REPLACE WITH DB CHECK LATER) ---
+    # --- Hardcoded Check ---
     if auth.get('username') == 'admin' and auth.get('password') == '12345':
         # 1. Define the payload
         payload = {
@@ -270,23 +270,6 @@ def get_teams():
         
     return format_response(data, 'teams', 200)
 
-# --- R: Read Single Team (GET) ---
-@app.route('/api/teams/<int:team_id>', methods=['GET'])
-def get_team(team_id):
-    """Handles reading a single team by ID."""
-    query = "SELECT team_id, team_name, region FROM Teams WHERE team_id = %s"
-    params = (team_id,)
-    
-    data, status_code = execute_query(query, params=params, fetch=True)
-    
-    if status_code != 200:
-        return jsonify(data), status_code
-    
-    
-    if not data:
-        return make_response(jsonify({'error': f'Team with ID {team_id} not found.'}), 404)
-        
-    return format_response(data[0], 'team', 200)
 
 # --- U: Update Team (PUT) ---
 @app.route('/api/teams/<int:team_id>', methods=['PUT'])
@@ -328,7 +311,7 @@ def update_team(team_id):
     
     # 4. Check for 404 Not Found condition
     if result.get('rows_affected') == 0:
-        # We need a quick SELECT check to distinguish between: 404 vs. 200 (no change)
+       
         check_query = "SELECT team_id FROM Teams WHERE team_id = %s"
         team_check, check_status = execute_query(check_query, (team_id,), fetch=True)
         
@@ -349,7 +332,7 @@ def delete_team(team_id):
     """
     Handles deleting a team by ID.
 
-    Graded Requirement: 
+    Returns:
     - 204 No Content on successful deletion.
     - 404 Not Found if team does not exist.
     - 409 Conflict if Foreign Key constraints prevent deletion.
@@ -365,8 +348,7 @@ def delete_team(team_id):
         error_message = result.get('error', '')
         
         # Check for Foreign Key constraint violation (MySQL Error 1451 or 1452)
-        # Your execute_query helper should catch this and return a 409 status code
-        # However, let's explicitly handle the message for clarity:
+      
         if 'Foreign Key' in error_message or status_code == 409:
              return make_response(jsonify({
                  'error': f"Cannot delete Team {team_id}. It is still referenced by Players or Matches.",

@@ -30,7 +30,7 @@ Clone the repository and set up the Python environment.
 
 ```bash
 # Clone the repository
-git clone [YOUR-GITHUB-REPO-URL-HERE]
+git clone https://github.com/QTaqua/CRUD-Project-CSE
 cd GAMEofJAB_API
 
 # Create and activate the virtual environment
@@ -43,7 +43,7 @@ source venv/bin/activate
 
 # Install required packages
 pip install -r requirements.txt
-
+```
 ### 3. Run App
 1.  Activate MySQL Server(where the database is stored)
 2.  Run python app.py(ensure virtual environment is running else the program will not start)

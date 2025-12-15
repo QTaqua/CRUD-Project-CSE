@@ -1,10 +1,10 @@
 # CRUD-Project-CSE
 crud project for cs elective project
-# 🥊 GAME of JAB API: Tournament Data Service
+# 🥊 GAME of JAB API: Tournament Data Service(supposed to be)
 
 ## Project Overview
 
-This is a RESTful API built for the **GAME of JAB** league, designed to manage core tournament data, including **Teams**, **Players**, and **Matches**. This project fulfills the requirements for the CSE 1 Final Project, demonstrating a fully functional CRUD (Create, Read, Update, Delete) API, database integration with MySQL, custom formatting, and security measures.
+This is a RESTful API built for the **GAME of JAB** league, designed to manage core tournament data, including **Teams**, **Players**, and **Matches**. however as of now it can only manage the teams database, future updates for the players and matches management coming. This project fulfills the requirements for the CSE 1 Final Project, demonstrating a fully functional CRUD (Create, Read, Update, Delete) API, database integration with MySQL, custom formatting, and security measures.
 
 ---
 

@@ -1,10 +1,10 @@
 # CRUD-Project-CSE
 crud project for cs elective project
-# 🥊 GAME of JAB API: Tournament Data Service
+# 🥊 GAME of JAB API: Tournament Data Service(supposed to be)
 
 ## Project Overview
 
-This is a RESTful API built for the **GAME of JAB** league, designed to manage core tournament data, including **Teams**, **Players**, and **Matches**. This project fulfills the requirements for the CSE 1 Final Project, demonstrating a fully functional CRUD (Create, Read, Update, Delete) API, database integration with MySQL, custom formatting, and security measures.
+This is a RESTful API built for the **GAME of JAB** league, designed to manage core tournament data, including **Teams**, **Players**, and **Matches**. however as of now it can only manage the teams database, future updates for the players and matches management coming. This project fulfills the requirements for the CSE 1 Final Project, demonstrating a fully functional CRUD (Create, Read, Update, Delete) API, database integration with MySQL, custom formatting, and security measures.
 
 ---
 
@@ -30,7 +30,7 @@ Clone the repository and set up the Python environment.
 
 ```bash
 # Clone the repository
-git clone [YOUR-GITHUB-REPO-URL-HERE]
+git clone https://github.com/QTaqua/CRUD-Project-CSE
 cd GAMEofJAB_API
 
 # Create and activate the virtual environment
@@ -43,7 +43,7 @@ source venv/bin/activate
 
 # Install required packages
 pip install -r requirements.txt
-
+```
 ### 3. Run App
 1.  Activate MySQL Server(where the database is stored)
 2.  Run python app.py(ensure virtual environment is running else the program will not start)
